@@ -1,0 +1,58 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# 允许 GitHub Pages 与 GITHUB_TOKEN 的最小权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        env:
+          # 站点部署在 /metro-catchment/ 子路径
+          VITE_BASE: /metro-catchment/
+          # 可选：如需启用真实高德地图，请到仓库 Settings → Secrets and variables → Actions
+          # 新增仓库 secret：VITE_AMAP_KEY（值 = 你的高德 Web 端 Key）。
+          # ⚠️ 注意：该 Key 会被打进公开站点的前端 JS，任何访客都可见，请谨慎；
+          #     未配置时站点运行于“演示模式”（模拟等时圈）。
+          VITE_AMAP_KEY: ${{ secrets.VITE_AMAP_KEY }}
+        run: pnpm build
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

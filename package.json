@@ -4,6 +4,7 @@
   "private": true,
   "description": "高德地图 · 地铁可达圈（等时圈）Web 应用",
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
