@@ -179,6 +179,11 @@ onBeforeUnmount(() => window.clearTimeout(debounceTimer))
           </span>
         </label>
       </div>
+      <p class="policy-note" :class="{ warn: store.currentPolicy === 'SUBWAY' }">
+        {{ store.currentPolicy === 'SUBWAY'
+          ? '仅地铁模式的等时圈偏保守：只计步行+地铁，且地铁图数据可能不含部分郊区/城际线路，结果常明显偏小。建议使用「地铁+公交」获得更完整覆盖。'
+          : '地铁+公交 覆盖最广；仅公交 仅按公交线路计算。' }}
+      </p>
     </section>
 
     <!-- 出行时间 -->
@@ -414,6 +419,19 @@ onBeforeUnmount(() => window.clearTimeout(debounceTimer))
   font-style: normal;
   font-size: 11.5px;
   color: #64748b;
+}
+.policy-note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.policy-note.warn {
+  color: #b45309;
+  background: #fef3c7;
 }
 .time-slider {
   width: 100%;

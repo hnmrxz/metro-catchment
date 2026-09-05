@@ -65,7 +65,7 @@ onMounted(async () => {
           <select class="city-select" :value="store.city.adcode" @change="onCityChange">
             <optgroup v-for="g in cityGroups" :key="g.province" :label="g.province">
               <option v-for="c in g.cities" :key="c.adcode" :value="c.adcode">
-                {{ c.name }}
+                {{ c.province }} · {{ c.name }}
               </option>
             </optgroup>
           </select>
