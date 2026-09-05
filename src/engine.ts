@@ -80,6 +80,8 @@ export function drawRealPoints(
     const color = colorForPoint(points, p.id)
     const marker = new runtime.AMap!.Marker({
       position: [p.lnglat[0], p.lnglat[1]],
+      // 显式锚点 bottom-center：内容不再用内部 transform 偏移，
+      // 避免叠加导致标记向左上（西北）偏移。
       anchor: 'bottom-center',
       content: buildMarkerHtml(p.name, color, p.id === selectedId),
       extData: { pointId: p.id },
@@ -92,8 +94,9 @@ export function drawRealPoints(
 
 export function buildMarkerHtml(name: string, color: string, active: boolean): string {
   const ring = active ? 'box-shadow:0 0 0 6px rgba(255,122,0,0.25);' : ''
+  // 这里不使用 transform:translate(-50%,-100%)，锚点由 Marker 的 anchor='bottom-center' 处理，
+  // 避免与内部 transform 叠加导致标记向左上（西北）偏移。
   return `<div style="
-      transform:translate(-50%,-100%);
       display:flex;flex-direction:column;align-items:center;
       cursor:pointer;filter:drop-shadow(0 6px 12px rgba(0,0,0,0.28));
     ">
@@ -103,7 +106,7 @@ export function buildMarkerHtml(name: string, color: string, active: boolean): s
         white-space:nowrap;${ring}
       ">${name}</div>
       <div style="
-        width:16px;height:16px;margin-top:4px;border-radius:50%;
+        width:12px;height:12px;margin-top:4px;border-radius:50%;
         background:${color};border:3px solid #fff;${ring}
       "></div>
     </div>`
@@ -134,6 +137,7 @@ export function buildRealMetroOverlays(
     const mk = new AMap.Marker({
       position: [st.lnglat[0], st.lnglat[1]],
       title: `${st.name} · ${Math.round(st.minutes)} 分钟`,
+      anchor: 'center',
       content: `<div style="width:8px;height:8px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.35);"></div>`,
       zIndex: 160,
       extData: { kind: 'metro-station' },

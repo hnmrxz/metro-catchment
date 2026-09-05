@@ -48,10 +48,31 @@ export interface MetroGraph {
   edges: MetroEdge[]
 }
 
-// —— 时间估计参数（站间 = 基础停靠 + 每公里行驶时间，近似包含停站均速） ——
-const DWELL_BASE_MIN = 0.9 // 相邻站基础时间（加减速/停站）
-const PER_KM_MIN = 1.2 // 每公里行驶分钟（含停站的均速约 50 km/h）
+// —— 时间估计参数 ——
+const DWELL_BASE_MIN = 0.7 // 相邻站基础时间（加减速/停站）
 const TRANSFER_MIN = 2.5 // 换乘（换线）分钟
+
+/**
+ * 依据线路特征估计该线的正线均速（km/h）：
+ *  - 城际 / 机场 / 快线 / 市域（名称或长区间）：高速（约 80 km/h）
+ *  - 区间越长（郊区/城际），均速越高；市区密集站点则较低。
+ * 这样 杭海城际、6/16/19 号线、绍兴1号线 等快线不会被市区均速模型高估。
+ */
+function resolveLineSpeedKmh(stops: MetroStop[], lineName: string): number {
+  const lower = (lineName || '').toLowerCase()
+  let avgSeg = 0
+  let n = 0
+  for (let i = 0; i < stops.length - 1; i++) {
+    avgSeg += haversineKm(stops[i].lng, stops[i].lat, stops[i + 1].lng, stops[i + 1].lat)
+    n++
+  }
+  avgSeg = n ? avgSeg / n : 0
+  if (/城际|机场|快线|市域|城铁|express/.test(lower)) return 80
+  if (avgSeg >= 3.2) return 76
+  if (avgSeg >= 2.0) return 55
+  if (avgSeg >= 1.4) return 44
+  return 36
+}
 
 /** 站 key：名称+坐标（保证跨线路去重） */
 export function stationKey(name: string, lng: number, lat: number): string {
@@ -89,11 +110,12 @@ export function buildMetroGraph(lines: MetroLine[]): MetroGraph {
   for (const line of lines) {
     const stops = line.stops
     if (stops.length < 2) continue
+    const speed = resolveLineSpeedKmh(stops, line.name)
     for (let i = 0; i < stops.length - 1; i++) {
       const a = ensureNode(stops[i], line.name)
       const b = ensureNode(stops[i + 1], line.name)
       const km = haversineKm(a.lng, a.lat, b.lng, b.lat)
-      const minutes = DWELL_BASE_MIN + km * PER_KM_MIN
+      const minutes = DWELL_BASE_MIN + (km / speed) * 60
       if (minutes <= 0) continue
       neighbors.get(a.key)!.push({ from: a.key, to: b.key, line: line.name, minutes })
       neighbors.get(b.key)!.push({ from: b.key, to: a.key, line: line.name, minutes })
