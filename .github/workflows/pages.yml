@@ -18,6 +18,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 需与 github-pages 环境关联，才能读取该环境的 secrets（VITE_AMAP_KEY 等）
+    environment: github-pages
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
@@ -33,11 +35,9 @@ jobs:
         env:
           # 站点部署在 /metro-catchment/ 子路径
           VITE_BASE: /metro-catchment/
-          # 可选：如需启用真实高德地图，请到仓库 Settings → Secrets and variables → Actions
-          # 新增仓库 secret：VITE_AMAP_KEY（值 = 你的高德 Web 端 Key）。
-          # ⚠️ 注意：该 Key 会被打进公开站点的前端 JS，任何访客都可见，请谨慎；
-          #     未配置时站点运行于“演示模式”（模拟等时圈）。
+          # 从 github-pages 环境的 secrets 读取；未配置时运行于「演示模式」
           VITE_AMAP_KEY: ${{ secrets.VITE_AMAP_KEY }}
+          VITE_AMAP_SECURITY_CODE: ${{ secrets.VITE_AMAP_SECURITY_CODE }}
         run: pnpm build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
