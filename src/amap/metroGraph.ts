@@ -48,10 +48,10 @@ export interface MetroGraph {
   edges: MetroEdge[]
 }
 
-// —— 估计参数 ——
-const AVG_SPEED_KMH = 32 // 含停站的均速
-const MIN_SEGMENT_MIN = 2 // 相邻站最小行驶分钟
-const TRANSFER_MIN = 3 // 换乘（换线）分钟
+// —— 时间估计参数（站间 = 基础停靠 + 每公里行驶时间，近似包含停站均速） ——
+const DWELL_BASE_MIN = 0.9 // 相邻站基础时间（加减速/停站）
+const PER_KM_MIN = 1.2 // 每公里行驶分钟（含停站的均速约 50 km/h）
+const TRANSFER_MIN = 2.5 // 换乘（换线）分钟
 
 /** 站 key：名称+坐标（保证跨线路去重） */
 export function stationKey(name: string, lng: number, lat: number): string {
@@ -93,7 +93,7 @@ export function buildMetroGraph(lines: MetroLine[]): MetroGraph {
       const a = ensureNode(stops[i], line.name)
       const b = ensureNode(stops[i + 1], line.name)
       const km = haversineKm(a.lng, a.lat, b.lng, b.lat)
-      const minutes = Math.max(MIN_SEGMENT_MIN, (km / AVG_SPEED_KMH) * 60)
+      const minutes = DWELL_BASE_MIN + km * PER_KM_MIN
       if (minutes <= 0) continue
       neighbors.get(a.key)!.push({ from: a.key, to: b.key, line: line.name, minutes })
       neighbors.get(b.key)!.push({ from: b.key, to: a.key, line: line.name, minutes })

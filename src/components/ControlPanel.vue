@@ -182,7 +182,9 @@ onBeforeUnmount(() => window.clearTimeout(debounceTimer))
       <p class="policy-note" :class="{ warn: store.currentPolicy === 'SUBWAY' }">
         {{ store.currentPolicy === 'SUBWAY'
           ? '仅地铁：按地铁网络遍历计算站至站可达时间（含换乘），覆盖各条线路（含城际），最长 180 分钟。'
-          : '地铁+公交 覆盖最广；仅公交 仅按公交线路计算（高德等时圈上限 60 分钟）。' }}
+          : store.currentPolicy === 'SUBWAY,BUS'
+            ? '地铁+公交：高德等时圈区域（含公交，上限 60 分钟）＋ 地铁网络站至站覆盖（最长 180 分钟）的综合结果。'
+            : '仅公交：按高德等时圈计算（上限 60 分钟）。' }}
       </p>
     </section>
 

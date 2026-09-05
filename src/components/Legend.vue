@@ -25,6 +25,9 @@ function truncate(s: string, n = 12): string {
     <span v-if="store.currentPolicy === 'SUBWAY'" class="legend-item">
       <span class="chip chip-metro"></span> 地铁网络覆盖（站至站可达，≤{{ store.currentTime }} 分钟）
     </span>
+    <span v-if="store.currentPolicy === 'SUBWAY,BUS'" class="legend-item">
+      <span class="chip chip-metro"></span> 综合：等时圈区域（含公交）＋ 地铁网络覆盖
+    </span>
     <span class="legend-meta">{{ store.currentTime }} 分钟 · {{ policyLabel() }}</span>
   </div>
 </template>

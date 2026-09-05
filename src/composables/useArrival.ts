@@ -26,15 +26,15 @@ export async function computeForPoint(
     status: 'pending',
   }
 
-  // 纯地铁：使用「地铁网络遍历」的站至站时间覆盖（更贴近地铁实际可达，
-  // 且不受高德 60 分钟限制，最长 180 分钟）。
+  // 纯地铁 / 地铁+公交 需要地铁数据（站至站覆盖）
+  if ((policy === 'SUBWAY' || policy === 'SUBWAY,BUS') && store.stations.length === 0) {
+    await store.loadStations().catch(() => {
+      /* 忽略，交由下方判空 */
+    })
+  }
+
+  // 纯地铁：地铁网络遍历的站至站时间覆盖
   if (policy === 'SUBWAY') {
-    // 确保某城市地铁数据已就绪（避免数据未加载时计算为空）
-    if (store.stations.length === 0) {
-      await store.loadStations().catch(() => {
-        /* 忽略，交由下方判空 */
-      })
-    }
     const cover = store.metroCoverageFor(point.lnglat, time)
     if (cover) {
       base.metroCoverage = cover
@@ -47,7 +47,7 @@ export async function computeForPoint(
     return base
   }
 
-  // 公交 / 地铁+公交：使用高德等时圈（上限 60 分钟）
+  // 公交 / 地铁+公交：高德等时圈（上限 60 分钟）
   const t = Math.min(time, 60)
   if (runtime.mode === 'real' && runtime.AMap) {
     try {
@@ -64,8 +64,21 @@ export async function computeForPoint(
     base.bounds = generateMockIsochrone(point.lnglat, t, policy)
     base.status = 'complete'
   }
+
+  // 地铁+公交：在与高德等时圈（含公交）之外，额外整合「地铁网络覆盖」，
+  // 得到站至站可达（最长 180 分钟）与公交/地铁等时圈区域的综合结果。
+  if (policy === 'SUBWAY,BUS') {
+    const cover = store.metroCoverageFor(point.lnglat, time)
+    if (cover) base.metroCoverage = cover
+    const hasRegion = base.bounds.length > 0
+    const hasStations = !!cover && cover.reachable.length > 0
+    if (hasStations && (!hasRegion || base.status === 'empty')) base.status = 'complete'
+    if (hasStations && !hasRegion) base.status = 'complete'
+  }
   if (time > 60) {
-    base.message = (base.message ? base.message + '；' : '') + '高德等时圈最多 60 分钟，已按 60 分钟计算'
+    base.message =
+      (base.message ? base.message + '；' : '') +
+      '高德等时圈最多 60 分钟（已按 60 分钟计算），地铁覆盖可按 ' + time + ' 分钟计算'
   }
 
   return base
