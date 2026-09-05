@@ -97,6 +97,17 @@ http://localhost:5173/?point=120.13,30.25&point=120.17,30.24&run=1&intersect=1
 
 > 注：高德的 `VITE_AMAP_KEY` 等环境变量，**运行环境（进程环境变量）优先于 `.env` 文件**。若终端已有同名变量，会覆盖 `.env` 中的配置。
 
+## 🌐 线上演示（GitHub Pages）
+
+本仓库已配置 GitHub Pages（源码 `master`，构建部署由 GitHub Actions 完成）：
+
+- **地址**：<https://hnmrxz.github.io/metro-catchment/>
+- **流程**：`.github/workflows/pages.yml` 在 push 到 `master` 或手动触发时构建并部署。
+- **默认演示模式**：构建时不注入 Key（`VITE_AMAP_KEY` 为空），站点用模拟等时圈呈现全部交互，避免 Key 泄露。
+- **启用真实地图（可选）**：在仓库 `Settings → Secrets and variables → Actions` 添加仓库 secret `VITE_AMAP_KEY`（值为你的高德 Web 端 Key），workflow 会自动注入。⚠️ 该 Key 会被打进公开站点的前端 JS，任何访客均可见，请谨慎使用（建议为演示使用专用/受限 Key）。
+
+> 部署于子路径 `/metro-catchment/`，Vite `base` 由构建环境变量 `VITE_BASE` 指定；本地开发默认 `base='/'`。
+
 ## 📁 目录结构
 
 ```
