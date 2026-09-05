@@ -49,16 +49,15 @@ export interface MetroGraph {
 }
 
 // —— 时间估计参数 ——
-const DWELL_BASE_MIN = 0.7 // 相邻站基础时间（加减速/停站）
 const TRANSFER_MIN = 2.5 // 换乘（换线）分钟
 
 /**
- * 依据线路特征估计该线的正线均速（km/h）：
- *  - 城际 / 机场 / 快线 / 市域（名称或长区间）：高速（约 80 km/h）
- *  - 区间越长（郊区/城际），均速越高；市区密集站点则较低。
- * 这样 杭海城际、6/16/19 号线、绍兴1号线 等快线不会被市区均速模型高估。
+ * 依据线路特征估计该线的「正线均速(km/h) + 平均停站基础分钟」：
+ *  - 城际 / 机场 / 快线 / 市域（名称或长区间）：高速（约 74 km/h）+ 更长停站（0.9 min）
+ *  - 区间越长（郊区/城际），均速越高；市区密集站点则较慢（约 36 km/h）+ 较短停站。
+ * 这样 杭海城际、19号线、16号线、绍兴1号线 等快线不会被市区均速模型高估或低估。
  */
-function resolveLineSpeedKmh(stops: MetroStop[], lineName: string): number {
+function resolveLineProfile(stops: MetroStop[], lineName: string): { speed: number; base: number } {
   const lower = (lineName || '').toLowerCase()
   let avgSeg = 0
   let n = 0
@@ -67,11 +66,10 @@ function resolveLineSpeedKmh(stops: MetroStop[], lineName: string): number {
     n++
   }
   avgSeg = n ? avgSeg / n : 0
-  if (/城际|机场|快线|市域|城铁|express/.test(lower)) return 80
-  if (avgSeg >= 3.2) return 76
-  if (avgSeg >= 2.0) return 55
-  if (avgSeg >= 1.4) return 44
-  return 36
+  if (/城际|机场|快线|市域|城铁|express/.test(lower) || avgSeg >= 3.2) return { speed: 74, base: 0.9 }
+  if (avgSeg >= 2.0) return { speed: 55, base: 0.8 }
+  if (avgSeg >= 1.4) return { speed: 44, base: 0.7 }
+  return { speed: 36, base: 0.6 }
 }
 
 /** 站 key：名称+坐标（保证跨线路去重） */
@@ -110,12 +108,12 @@ export function buildMetroGraph(lines: MetroLine[]): MetroGraph {
   for (const line of lines) {
     const stops = line.stops
     if (stops.length < 2) continue
-    const speed = resolveLineSpeedKmh(stops, line.name)
+    const { speed, base } = resolveLineProfile(stops, line.name)
     for (let i = 0; i < stops.length - 1; i++) {
       const a = ensureNode(stops[i], line.name)
       const b = ensureNode(stops[i + 1], line.name)
       const km = haversineKm(a.lng, a.lat, b.lng, b.lat)
-      const minutes = DWELL_BASE_MIN + (km / speed) * 60
+      const minutes = base + (km / speed) * 60
       if (minutes <= 0) continue
       neighbors.get(a.key)!.push({ from: a.key, to: b.key, line: line.name, minutes })
       neighbors.get(b.key)!.push({ from: b.key, to: a.key, line: line.name, minutes })
