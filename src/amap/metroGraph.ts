@@ -219,7 +219,9 @@ export function computeMetroCoverage(
 
 /** 读取某城市的地铁数据（含 station 与 lines）。 */
 export async function fetchMetroData(adcode: string): Promise<MetroData> {
-  const res = await fetch(`/data/subway/stations-${adcode}.json`)
+  // 用 Vite 的 BASE_URL（含子路径，如 /metro-catchment/）拼接，保证在 GitHub Pages 子路径下可取到数据
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+  const res = await fetch(`${base}/data/subway/stations-${adcode}.json`)
   if (!res.ok) throw new Error(`地铁数据加载失败 (${res.status})`)
   const data = await res.json()
   const stations: NormalizedStation[] = (data.stations || [])
