@@ -182,29 +182,36 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  let stationsPromise: Promise<NormalizedStation[]> | null = null
   async function loadStations(): Promise<NormalizedStation[]> {
-    if (stations.value.length || stationsLoading.value) return stations.value
-    stationsLoading.value = true
-    setStatus('正在获取地铁站点数据…')
-    try {
-      const data = await fetchMetroData(city.value.adcode)
-      const tagged = data.stations.map((s) => ({
-        ...s,
-        city: city.value.name,
-        cityAdcode: city.value.adcode,
-      }))
-      stations.value = tagged
-      mergeStations(tagged)
-      metroLinesCache.set(city.value.adcode, data.lines)
-      poolLoadedCities.add(city.value.adcode)
-      void ensureStationPool()
-      setStatus(`已获取 ${stations.value.length} 个地铁站点`, 2500)
-    } catch (e: any) {
-      setStatus(`地铁站点获取失败：${e?.message || e}`, 3500)
-    } finally {
-      stationsLoading.value = false
-    }
-    return stations.value
+    if (stations.value.length) return stations.value
+    if (stationsPromise) return stationsPromise
+    stationsPromise = (async () => {
+      stationsLoading.value = true
+      setStatus('正在获取地铁站点数据…')
+      try {
+        const data = await fetchMetroData(city.value.adcode)
+        const tagged = data.stations.map((s) => ({
+          ...s,
+          city: city.value.name,
+          cityAdcode: city.value.adcode,
+        }))
+        stations.value = tagged
+        mergeStations(tagged)
+        metroLinesCache.set(city.value.adcode, data.lines)
+        poolLoadedCities.add(city.value.adcode)
+        void ensureStationPool()
+        setStatus(`已获取 ${stations.value.length} 个地铁站点`, 2500)
+      } catch (e: any) {
+        setStatus(`地铁站点获取失败：${e?.message || e}`, 3500)
+        throw e
+      } finally {
+        stationsLoading.value = false
+        stationsPromise = null
+      }
+      return stations.value
+    })()
+    return stationsPromise
   }
 
   /** 计算从某点出发的地铁站至地铁站时间覆盖（就近站点为起点）。 */

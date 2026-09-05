@@ -29,6 +29,12 @@ export async function computeForPoint(
   // 纯地铁：使用「地铁网络遍历」的站至站时间覆盖（更贴近地铁实际可达，
   // 且不受高德 60 分钟限制，最长 180 分钟）。
   if (policy === 'SUBWAY') {
+    // 确保某城市地铁数据已就绪（避免数据未加载时计算为空）
+    if (store.stations.length === 0) {
+      await store.loadStations().catch(() => {
+        /* 忽略，交由下方判空 */
+      })
+    }
     const cover = store.metroCoverageFor(point.lnglat, time)
     if (cover) {
       base.metroCoverage = cover
