@@ -9,7 +9,7 @@ import {
   type Policy,
 } from '@/config'
 import { hasKey } from '@/amap/loader'
-import { fetchLines, flattenStations, searchStations, type NormalizedStation } from '@/amap/subway'
+import { fetchCityStations, searchStations, type NormalizedStation } from '@/amap/subway'
 import { intersectRings } from '@/utils/isochroneGeometry'
 import type { ArrivalRangeResult, Point, PlaceCandidate } from '@/types'
 import type { MapMode } from '@/engine'
@@ -162,8 +162,8 @@ export const useAppStore = defineStore('app', () => {
   async function loadCityStations(adcode: string, cityName: string): Promise<void> {
     if (poolLoadedCities.has(adcode)) return
     try {
-      const lines = await fetchLines(adcode, cityName)
-      mergeStations(flattenStations(lines, cityName))
+      const list = await fetchCityStations(adcode, cityName)
+      mergeStations(list)
       poolLoadedCities.add(adcode)
     } catch {
       // 单城失败不阻塞其它城市；允许下次重试
@@ -176,9 +176,9 @@ export const useAppStore = defineStore('app', () => {
     stationsLoading.value = true
     setStatus('正在获取地铁站点数据…')
     try {
-      const lines = await fetchLines(city.value.adcode, city.value.name)
-      stations.value = flattenStations(lines, city.value.name)
-      mergeStations(stations.value)
+      const list = await fetchCityStations(city.value.adcode, city.value.name)
+      stations.value = list
+      mergeStations(list)
       poolLoadedCities.add(city.value.adcode)
       void ensureStationPool()
       setStatus(`已获取 ${stations.value.length} 个地铁站点`, 2500)
@@ -190,7 +190,7 @@ export const useAppStore = defineStore('app', () => {
     return stations.value
   }
 
-  /** 确保跨城市检索池已加载（当前城市 + 各配置城市）。 */
+  /** 确保跨城市检索池已加载（当前城市 + 各配置城市，逐个加载以避免 Subway 全局冲突）。 */
   async function ensureStationPool(): Promise<void> {
     if (stationPoolReady.value || stationPoolLoading.value) return
     stationPoolLoading.value = true
@@ -198,11 +198,10 @@ export const useAppStore = defineStore('app', () => {
       if (!poolLoadedCities.has(city.value.adcode)) {
         await loadCityStations(city.value.adcode, city.value.name)
       }
-      await Promise.all(
-        CITIES.filter((c) => c.adcode !== city.value.adcode).map((c) =>
-          loadCityStations(c.adcode, c.name),
-        ),
-      )
+      for (const c of CITIES) {
+        if (c.adcode === city.value.adcode) continue
+        await loadCityStations(c.adcode, c.name)
+      }
       stationPoolReady.value = true
     } finally {
       stationPoolLoading.value = false

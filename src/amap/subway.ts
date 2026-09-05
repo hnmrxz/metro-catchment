@@ -1,8 +1,8 @@
 /**
- * 地铁图 JS API 集成：城市列表、线路列表、站点检索。
- * 地铁图 API 为 Beta 版，返回结构会随版本变化，此处做防御式归一化。
+ * 地铁站点数据：从同源静态数据文件获取（public/data/subway/stations-<adcode>.json）。
+ * 数据由 scripts/generate-subway-data.mjs 预生成（源自高德地铁数据），避免依赖不稳定的
+ * 地铁图 JS API（Beta 版，且不便于浏览器直接加载）。
  */
-import { loadSubway } from './loader'
 import type { PlaceCandidate } from '../types'
 
 export interface NormalizedLine {
@@ -21,104 +21,48 @@ export interface NormalizedStation {
   city?: string
 }
 
-function pickName(o: any): string {
-  return String(o?.n ?? o?.name ?? o?.km ?? '')
+/** 从静态数据文件加载某城市所有站点。 */
+export async function fetchCityStations(adcode: string, cityName?: string): Promise<NormalizedStation[]> {
+  const res = await fetch(`/data/subway/stations-${adcode}.json`)
+  if (!res.ok) throw new Error(`地铁数据加载失败 (${res.status})`)
+  const data = await res.json()
+  const raw = Array.isArray(data?.stations) ? data.stations : []
+  return raw
+    .map((s: any) => ({
+      id: String(s?.id ?? `${adcode}:${s?.name}`),
+      name: String(s?.name ?? ''),
+      lng: Number(s?.lng),
+      lat: Number(s?.lat),
+      lineNames: Array.isArray(s?.lineNames) ? (s.lineNames as string[]) : [],
+      city: cityName,
+    }))
+    .filter((s: any) => s.name && Number.isFinite(s.lng) && Number.isFinite(s.lat))
 }
 
-function pickLngLat(o: any): { lng: number; lat: number } | null {
-  const s = o?.sl ?? o?.lnglat ?? o?.xy ?? ''
-  if (Array.isArray(s)) return { lng: Number(s[0]), lat: Number(s[1]) }
-  if (typeof s === 'string' && s.includes(',')) {
-    const [lng, lat] = s.split(',').map(Number)
-    if (Number.isFinite(lng) && Number.isFinite(lat)) return { lng, lat }
-  }
-  const lng = Number(o?.lng ?? o?.lng2 ?? NaN)
-  const lat = Number(o?.lat ?? o?.lat2 ?? NaN)
-  if (Number.isFinite(lng) && Number.isFinite(lat)) return { lng, lat }
-  return null
+/** 在站点列表中按关键词模糊检索（支持站名/拼音/线路）。 */
+export function searchStations(
+  stations: NormalizedStation[],
+  keyword: string,
+  limit = 8,
+): PlaceCandidate[] {
+  const kw = keyword.trim().toLowerCase()
+  if (!kw) return []
+  const lower = (s: NormalizedStation) =>
+    s.name.toLowerCase().includes(kw) ||
+    s.lineNames.some((l) => l.toLowerCase().includes(kw))
+  const startsWith = (s: NormalizedStation) => s.name.toLowerCase().startsWith(kw)
+  const scored = stations
+    .filter((s) => lower(s))
+    .sort((a, b) => (startsWith(b) ? 1 : 0) - (startsWith(a) ? 1 : 0))
+  return scored.slice(0, limit).map((s) => ({
+    name: s.name,
+    lnglat: [s.lng, s.lat],
+    address: [s.city, ...s.lineNames].filter(Boolean).join(' / ') || undefined,
+    type: 'station' as const,
+  }))
 }
 
-function normalizeLine(line: any, fallbackName = ''): NormalizedLine {
-  const lineName = String(line?.kn ?? line?.name ?? fallbackName ?? '')
-  const color = String(line?.cl ?? line?.color ?? '#0096FF')
-  const rawStations = Array.isArray(line?.st)
-    ? line.st
-    : Array.isArray(line?.stations)
-      ? line.stations
-      : []
-  const stations: NormalizedStation[] = []
-  for (const st of rawStations) {
-    const pos = pickLngLat(st)
-    if (!pos) continue
-    stations.push({
-      id: String(st?.poiid ?? st?.id ?? `s${stations.length}`),
-      name: pickName(st),
-      lng: pos.lng,
-      lat: pos.lat,
-      lineNames: [lineName].filter(Boolean),
-    })
-  }
-  return { name: lineName, color, stations }
-}
-
-function normalizeLineList(raw: any): NormalizedLine[] {
-  // getLineList 返回可能为数组直接，或 { lines, ... }
-  const arr = Array.isArray(raw) ? raw : (raw?.lines ?? raw?.l ?? [])
-  if (!Array.isArray(arr)) return []
-  return arr.map((l, i) => normalizeLine(l, `线路${i + 1}`)).filter((l) => l.stations.length > 0)
-}
-
-/** 获取当前城市的所有线路及站点（合并重名站点的线路归属）。 */
-export async function fetchLines(adcode: string, cityName?: string): Promise<NormalizedLine[]> {
-  await loadSubway()
-  const SubwayCtor = (window as any).Subway
-  if (!SubwayCtor) throw new Error('Subway 未加载')
-
-  // Subway 构造器需要一个真实容器，这里创建一个隐藏的容器元素
-  const holder = document.createElement('div')
-  holder.id = '__amap_subway_holder__'
-  holder.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:400px;height:400px;'
-  document.body.appendChild(holder)
-
-  let subway: any = null
-  try {
-    subway = new SubwayCtor(holder, { adcode, theme: 'normal', easy: true })
-    const data = await new Promise<any>((resolve, reject) => {
-      let done = false
-      const timer = setTimeout(() => {
-        if (!done) {
-          done = true
-          reject(new Error('线路数据获取超时'))
-        }
-      }, 10000)
-      try {
-        subway.getLineList((list: any) => {
-          if (!done) {
-            done = true
-            clearTimeout(timer)
-            resolve(list)
-          }
-        })
-      } catch (e) {
-        clearTimeout(timer)
-        if (!done) {
-          done = true
-          reject(e)
-        }
-      }
-    })
-    return normalizeLineList(data)
-  } finally {
-    try {
-      subway?.destroy?.()
-    } catch {
-      /* ignore */
-    }
-    holder.remove()
-  }
-}
-
-/** 将线路数据展平为站点 + 所属线路。 */
+// ----- 兼容旧接口（生成数据后不再用于运行时，仅保留类型描述） -----
 export function flattenStations(lines: NormalizedLine[], cityName?: string): NormalizedStation[] {
   const map = new Map<string, NormalizedStation>()
   for (const line of lines) {
@@ -137,27 +81,4 @@ export function flattenStations(lines: NormalizedLine[], cityName?: string): Nor
     }
   }
   return Array.from(map.values())
-}
-
-/** 在站点列表中按关键词模糊检索。 */
-export function searchStations(
-  stations: NormalizedStation[],
-  keyword: string,
-  limit = 8,
-): PlaceCandidate[] {
-  const kw = keyword.trim().toLowerCase()
-  if (!kw) return []
-  return stations
-    .filter(
-      (s) =>
-        s.name.toLowerCase().includes(kw) ||
-        s.lineNames.some((l) => l.toLowerCase().includes(kw)),
-    )
-    .slice(0, limit)
-    .map((s) => ({
-      name: s.name,
-      lnglat: [s.lng, s.lat],
-      address: s.lineNames.length ? `${s.lineNames.join(' / ')}` : undefined,
-      type: 'station' as const,
-    }))
 }

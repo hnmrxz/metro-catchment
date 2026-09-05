@@ -101,23 +101,3 @@ export async function loadAMap(): Promise<AMapNamespace> {
 
   return amapPromise
 }
-
-let subwayPromise: Promise<void> | null = null
-
-/** 动态加载地铁图 JS API（注入全局 Subway）。需真实 Key。 */
-export async function loadSubway(): Promise<void> {
-  if (subwayPromise) return subwayPromise
-  subwayPromise = new Promise<void>((resolve, reject) => {
-    if ((window as any).Subway) {
-      resolve()
-      return
-    }
-    const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/subway?v=1.0&key=${KEY}`
-    script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('地铁图 JS API 加载失败'))
-    document.head.appendChild(script)
-  })
-  return subwayPromise
-}

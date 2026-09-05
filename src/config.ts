@@ -3,26 +3,37 @@
  * 可通过 .env 的 VITE_* 或运行时环境覆盖部分默认值。
  */
 
-export interface CityMeta {
-  adcode: string
-  name: string
-  /** 地图默认中心 */
-  center: [number, number]
-  /** 默认缩放级别 */
-  zoom: number
+import { CHINA_METRO_CITIES, type MetroCity } from './data/chinaMetroCities'
+
+export interface CityMeta extends MetroCity {}
+
+/** 中国所有已开通轨道交通的城市数据集（按省份分组、拼音排序由下方 helper 处理）。 */
+export const CITIES: CityMeta[] = CHINA_METRO_CITIES
+
+/** 默认城市（杭州） */
+export const DEFAULT_CITY: CityMeta =
+  CITIES.find((c) => c.adcode === '3301') || CITIES[0]
+
+/** 将城市按省份分组，省份按拼音排序、省内城市按拼音排序。 */
+export function groupCitiesByProvince(cities: CityMeta[] = CITIES): Array<{
+  province: string
+  provinceEn: string
+  cities: CityMeta[]
+}> {
+  const map = new Map<string, CityMeta[]>()
+  for (const c of cities) {
+    const arr = map.get(c.province) || []
+    arr.push(c)
+    map.set(c.province, arr)
+  }
+  return Array.from(map.entries())
+    .map(([province, list]) => ({
+      province,
+      provinceEn: (list[0]?.provinceEn ?? province).toLowerCase(),
+      cities: list.sort((a, b) => a.en.localeCompare(b.en)),
+    }))
+    .sort((a, b) => a.provinceEn.localeCompare(b.provinceEn))
 }
-
-/** 支持的地铁图城市（adcode 参考）。更多城市可通过 subway.getCityList() 动态获取。 */
-export const CITIES: CityMeta[] = [
-  { adcode: '3301', name: '杭州', center: [120.15, 30.28], zoom: 12 },
-  { adcode: '1100', name: '北京', center: [116.397, 39.904], zoom: 11 },
-  { adcode: '3100', name: '上海', center: [121.473, 31.23], zoom: 11 },
-  { adcode: '4401', name: '广州', center: [113.264, 23.129], zoom: 11 },
-  { adcode: '4403', name: '深圳', center: [114.057, 22.543], zoom: 11 },
-]
-
-/** 默认城市 */
-export const DEFAULT_CITY: CityMeta = CITIES[0]
 
 /** 出行方式策略 */
 export type Policy = 'SUBWAY' | 'BUS' | 'SUBWAY,BUS'

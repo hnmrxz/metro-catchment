@@ -2,7 +2,7 @@
 
 基于 **高德地图 JS API 2.0** 的出行等时圈分析工具：点击地图或搜索选取起点，系统自动计算在设定的时间内，通过 **地铁 / 公交 / 地铁+公交** 能够到达的区域（i.e. 可达圈 / 等时圈），并在地图上以彩色多边形渲染。支持多起点对比与交集高亮。
 
-- **默认城市**：杭州（可切换北京 / 上海 / 广州 / 深圳）
+- **默认城市**：杭州（支持 **45 个开通轨道交通的城市**，按省份分组、拼音排序）
 - **默认出行方式**：地铁 + 公交（`SUBWAY,BUS`）
 - **默认出行时间**：30 分钟（1–60 分钟可调）
 - **可同时对比起点**：最多 3 个
@@ -18,13 +18,16 @@
 | 出行方式 | 地铁 / 公交 / 地铁+公交（默认） |
 | 时间设置 | 滑块调节 1–60 分钟 |
 | 多起点对比 | 最多 3 个起点，可叠加交集(turf)高亮 |
+| 城市切换 | 45 个轨道交通城市，按省份分组、拼音排序（含跨城市站检索） |
+| 站点检索 | 支持站名 / 拼音 / 线路模糊搜索，覆盖同网络跨市站点（如杭海城际→海宁） |
 | 演示模式 | 未配置 Key 时用模拟等时圈预览全流程 |
 
 ## 🛠 技术栈
 
 - **框架**：Vue 3（Composition API） + Vite + TypeScript
 - **状态**：Pinia
-- **地图**：高德地图 JS API 2.0（`@amap/amap-jsapi-loader`）+ 地铁图 JS API 1.0
+- **地图**：高德地图 JS API 2.0（`@amap/amap-jsapi-loader`）
+- **站点数据**：预生成的静态 JSON（`public/data/subway/stations-<adcode>.json`，源自高德地铁数据）
 - **几何**：turf.js（交集 / 并集计算）
 
 > 注：`AMap.ArrivalRange` 出行耗时最大支持 **60 分钟**，超时会报错；该接口存在 QPS 限制，本项目按顺序串行调用以降低频率。
@@ -103,6 +106,10 @@ metro-catchment/
 ├─ index.html
 ├─ vite.config.ts
 ├─ tsconfig*.json
+├─ scripts/
+│  └─ generate-subway-data.mjs   # 重新生成各城市地铁站点数据
+├─ public/
+│  └─ data/subway/stations-<adcode>.json  # 各城市站点数据（预生成）
 ├─ docs/
 │  ├─ DEPLOY.md            # 部署文档
 │  └─ USER_GUIDE.md        # 用户使用说明
@@ -111,10 +118,11 @@ metro-catchment/
    ├─ config.ts            # 默认城市/策略/颜色等
    ├─ types.ts             # 类型定义
    ├─ engine.ts            # 真实地图与演示画布渲染
+   ├─ data/chinaMetroCities.ts   # 45 个轨道交通城市（省份/拼音/坐标）
    ├─ amap/
-   │  ├─ loader.ts         # AMapLoader 封装 + 地铁图加载
-   │  ├─ arrival.ts        # ArrivalRange 封装
-   │  ├─ subway.ts         # 地铁线路/站点获取与检索
+   │  ├─ loader.ts         # AMapLoader 封装
+   │  ├─ arrival.ts        # ArrivalRange 封装 + bounds 归一化
+   │  ├─ subway.ts         # 站点数据读取与检索
    │  └─ mockIsochrone.ts  # 演示等时圈生成器
    ├─ composables/
    │  └─ useArrival.ts     # 可达圈计算协调
@@ -129,11 +137,21 @@ metro-catchment/
       └─ Legend.vue        # 图例
 ```
 
+## 🗂 地铁站点数据
+
+站点数据来自高德地铁数据源（`map.amap.com/service/subway`），在 Node 侧抓取后落盘为同源静态 JSON（`public/data/subway/stations-<adcode>.json`），避免浏览器端跨域限制与不稳定的地铁图 JS API。应用启动后按城市懒加载并以跨城市检索池缓存。
+
+如需重新生成（例如官方数据更新）：
+
+```bash
+node scripts/generate-subway-data.mjs
+```
+
 ## ⚠️ 注意事项
 
 - 高德地图 **Key 请勿提交到代码仓库**（已在 `.gitignore` 中忽略 `.env`）。
-- 地铁图 JS API 目前为 **Beta** 版本，站点数据结构可能随官方更新变化，本项目已做防御式归一化。
-- 若地铁图不显示，请检查 `adcode` 是否正确（见 `src/config.ts` 的 `CITIES`）。
+- 站点数据为**预生成静态数据**；如需更新城市接入或站点，重新运行生成脚本即可。
+- 城市坐标中心为近似值，真实模式下选择城市后会以 Geocoder 精确定位。
 - 移动端适配已内置（面板可收起），如需地铁图示意等额外功能可启用 `src/amap/subway.ts` 的扩展。
 
 ## 📚 参考资料

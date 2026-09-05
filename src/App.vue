@@ -6,13 +6,15 @@ import Legend from '@/components/Legend.vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { computeAll } from '@/composables/useArrival'
 import { runtime } from '@/engine'
-import { CITIES } from '@/config'
+import { CITIES, groupCitiesByProvince } from '@/config'
 
 const store = useAppStore()
 const showHelp = ref(false)
 const showPanel = ref(true)
 
 const cityLabel = computed(() => store.city.name)
+// 所有开通轨道交通的城市，按省份分组、拼音排序
+const cityGroups = computed(() => groupCitiesByProvince())
 
 function onCityChange(e: Event): void {
   const adcode = (e.target as HTMLSelectElement).value
@@ -61,9 +63,11 @@ onMounted(async () => {
         <label class="city-picker">
           <span class="city-label">城市</span>
           <select class="city-select" :value="store.city.adcode" @change="onCityChange">
-            <option v-for="c in CITIES" :key="c.adcode" :value="c.adcode">
-              {{ c.name }}
-            </option>
+            <optgroup v-for="g in cityGroups" :key="g.province" :label="g.province">
+              <option v-for="c in g.cities" :key="c.adcode" :value="c.adcode">
+                {{ c.name }}
+              </option>
+            </optgroup>
           </select>
         </label>
         <button class="icon-btn" title="帮助" @click="showHelp = true">?</button>
