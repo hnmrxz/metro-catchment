@@ -2,7 +2,7 @@
 import { onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { loadAMap } from '@/amap/loader'
-import { runtime, drawRealResults, drawRealPoints, drawDemo } from '@/engine'
+import { runtime, drawRealResults, drawRealPoints, drawDemo, buildRealMetroOverlays } from '@/engine'
 import { POLYGON_FILL_OPACITY, POLYGON_STROKE_OPACITY } from '@/config'
 
 const store = useAppStore()
@@ -13,6 +13,7 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 // 覆盖物注册表（非响应式）
 const polygonMap = new Map<string, any[]>()
 const markerMap = new Map<string, any>()
+const metroOverlayMap = new Map<string, any[]>()
 let intersectionOverlays: any[] = []
 let initError = ''
 let mapClickHandler: ((e: any) => void) | null = null
@@ -107,8 +108,25 @@ function clearRealOverlays(): void {
   polygonMap.clear()
   for (const [, m] of markerMap) if (m && typeof m.setMap === 'function') m.setMap(null)
   markerMap.clear()
+  for (const [, arr] of metroOverlayMap) if (arr.length && map.remove) map.remove(arr)
+  metroOverlayMap.clear()
   if (intersectionOverlays.length && map.remove) map.remove(intersectionOverlays)
   intersectionOverlays = []
+}
+
+// 绘制「纯地铁」模式的地铁网络覆盖（可达区段 + 站点）
+function drawMetroReal(): void {
+  const map = runtime.map
+  const AMap = runtime.AMap
+  if (!map || !AMap) return
+  for (const [, arr] of metroOverlayMap) if (arr.length && map.remove) map.remove(arr)
+  metroOverlayMap.clear()
+  for (const r of store.results) {
+    if (!r.metroCoverage) continue
+    const overlays = buildRealMetroOverlays(AMap, r.metroCoverage, r.color)
+    if (overlays.length) map.add(overlays)
+    metroOverlayMap.set(r.point.id, overlays)
+  }
 }
 
 function drawIntersectionReal(): void {
@@ -139,6 +157,7 @@ function fullRedraw(): void {
   if (runtime.mode === 'real' && runtime.map && runtime.AMap) {
     drawRealResults(runtime.AMap, runtime.map, store.results, polygonMap)
     drawRealPoints(runtime.map, store.points, markerMap, store.selectedPointId)
+    drawMetroReal()
     drawIntersectionReal()
   } else if (isDemo() && canvas.value) {
     drawDemo(
@@ -156,6 +175,7 @@ function fitView(): void {
     const all: any[] = []
     for (const [, arr] of polygonMap) all.push(...arr)
     for (const [, m] of markerMap) all.push(m)
+    for (const [, arr] of metroOverlayMap) all.push(...arr)
     if (all.length) runtime.map.setFitView(all, false, [60, 60, 60, 60])
     else runtime.map.setZoom(store.city.zoom)
   }

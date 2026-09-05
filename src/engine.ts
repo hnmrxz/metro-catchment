@@ -4,7 +4,7 @@
  *  - AMap / map: 高德命名空间与地图实例（仅 real 模式存在）
  * 渲染函数同时供真实地图与演示画布使用。
  */
-import type { ArrivalRangeResult, Point } from './types'
+import type { ArrivalRangeResult, MetroCoverageResult, Point } from './types'
 import { RESULT_COLORS, POLYGON_FILL_OPACITY, POLYGON_STROKE_WEIGHT, POLYGON_STROKE_OPACITY } from './config'
 import type { AMapNamespace } from './amap/loader'
 
@@ -109,6 +109,40 @@ export function buildMarkerHtml(name: string, color: string, active: boolean): s
     </div>`
 }
 
+/** 真实地图：构建地铁网络覆盖（可达区段折线 + 站点圆点）的覆盖物。 */
+export function buildRealMetroOverlays(
+  AMap: any,
+  coverage: MetroCoverageResult,
+  color: string,
+): any[] {
+  const overlays: any[] = []
+  for (const edge of coverage.edges) {
+    const pl = new AMap.Polyline({
+      path: [
+        new AMap.LngLat(edge.from[0], edge.from[1]),
+        new AMap.LngLat(edge.to[0], edge.to[1]),
+      ],
+      strokeColor: color,
+      strokeWeight: 4,
+      strokeOpacity: 0.92,
+      lineJoin: 'round',
+      zIndex: 150,
+    })
+    overlays.push(pl)
+  }
+  for (const st of coverage.reachable) {
+    const mk = new AMap.Marker({
+      position: [st.lnglat[0], st.lnglat[1]],
+      title: `${st.name} · ${Math.round(st.minutes)} 分钟`,
+      content: `<div style="width:8px;height:8px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.35);"></div>`,
+      zIndex: 160,
+      extData: { kind: 'metro-station' },
+    })
+    overlays.push(mk)
+  }
+  return overlays
+}
+
 /* ========================= 演示模式画布 ========================= */
 
 interface DemoShape {
@@ -201,6 +235,46 @@ export function drawDemo(
       ctx.fill()
       ctx.strokeStyle = r.color
       ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+
+  // 绘制地铁网络覆盖（纯地铁模式：可达区段 + 站点）
+  for (const r of results) {
+    const cov = r.metroCoverage
+    if (!cov) continue
+    // 可达区段折线
+    ctx.strokeStyle = r.color
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    for (const e of cov.edges) {
+      ctx.beginPath()
+      ctx.moveTo(px(e.from[0]), py(e.from[1]))
+      ctx.lineTo(px(e.to[0]), py(e.to[1]))
+      ctx.stroke()
+    }
+    // 可达站点圆点
+    for (const st of cov.reachable) {
+      const x = px(st.lnglat[0])
+      const y = py(st.lnglat[1])
+      ctx.beginPath()
+      ctx.arc(x, y, 4, 0, Math.PI * 2)
+      ctx.fillStyle = r.color
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+    // 起点站标注
+    if (cov.startLnglat) {
+      const x = px(cov.startLnglat[0])
+      const y = py(cov.startLnglat[1])
+      ctx.beginPath()
+      ctx.arc(x, y, 8, 0, Math.PI * 2)
+      ctx.fillStyle = r.color
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 3
       ctx.stroke()
     }
   }

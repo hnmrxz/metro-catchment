@@ -2,8 +2,10 @@
 // 运行：node scripts/generate-subway-data.mjs
 // 说明：高德地铁数据源 https://map.amap.com/service/subway?&srhdata=<adcode>_drw_<en>.json
 //       该端点在浏览器端受 CORS 限制，这里在 Node 侧抓取并落盘为同源静态数据。
+// 输出包含：
+//  - stations：扁平站点（用于站点检索）
+//  - lines：按顺序的线路停靠点（用于构建地铁网络图 / 站点间时间遍历）
 import { writeFile, mkdir } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 
 const cities = [
   ['1100', 'beijing'], ['1200', 'tianjin'], ['3100', 'shanghai'], ['5000', 'chongqing'],
@@ -23,35 +25,41 @@ const cities = [
 
 const OUT = new URL('../public/data/subway/', import.meta.url)
 
+function coord(st) {
+  const parts = String(st?.sl ?? '').split(',')
+  const lng = Number(parts[0])
+  const lat = Number(parts[1])
+  return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null
+}
+
 function normalize(data, adcode) {
-  const lines = Array.isArray(data?.l) ? data.l : []
-  const map = new Map()
-  for (const line of lines) {
-    const lineName = String(line?.kn ?? '').trim()
-    const sts = Array.isArray(line?.st) ? line.st : []
+  const rawLines = Array.isArray(data?.l) ? data.l : []
+  const stationMap = new Map() // key -> flat station
+  const lines = []
+
+  for (const raw of rawLines) {
+    const lineName = String(raw?.kn ?? '').trim()
+    const color = String(raw?.cl ?? '').trim()
+    const sts = Array.isArray(raw?.st) ? raw.st : []
+    const stops = []
     for (const st of sts) {
       const name = String(st?.n ?? '').trim()
-      const sl = String(st?.sl ?? '')
-      const parts = sl.split(',')
-      const lng = Number(parts[0])
-      const lat = Number(parts[1])
-      if (!name || !Number.isFinite(lng) || !Number.isFinite(lat)) continue
-      const key = `${name}|${lng}|${lat}`
-      const exist = map.get(key)
+      const c = coord(st)
+      if (!name || !c) continue
+      const id = String(st?.poiid ?? `${adcode}:${name}`)
+      stops.push({ id, name, lng: c[0], lat: c[1] })
+      const key = `${name}|${c[0]}|${c[1]}`
+      const exist = stationMap.get(key)
       if (exist) {
         if (lineName && !exist.lineNames.includes(lineName)) exist.lineNames.push(lineName)
       } else {
-        map.set(key, {
-          id: String(st?.poiid ?? `${adcode}:${name}`),
-          name,
-          lng,
-          lat,
-          lineNames: lineName ? [lineName] : [],
-        })
+        stationMap.set(key, { id, name, lng: c[0], lat: c[1], lineNames: lineName ? [lineName] : [] })
       }
     }
+    if (stops.length) lines.push({ name: lineName, color, stops })
   }
-  return Array.from(map.values())
+
+  return { stations: Array.from(stationMap.values()), lines }
 }
 
 async function fetchCity(adcode, en) {
@@ -73,10 +81,10 @@ async function run() {
       const idx = i++
       const [adcode, en] = cities[idx]
       try {
-        const stations = await fetchCity(adcode, en)
+        const { stations, lines } = await fetchCity(adcode, en)
         const file = new URL(`stations-${adcode}.json`, OUT)
-        await writeFile(file, JSON.stringify({ adcode, count: stations.length, stations }))
-        console.log(`OK ${adcode} ${en} -> ${stations.length} stations`)
+        await writeFile(file, JSON.stringify({ adcode, count: stations.length, lineCount: lines.length, stations, lines }))
+        console.log(`OK ${adcode} ${en} -> ${stations.length} stations / ${lines.length} lines`)
         ok++
       } catch (e) {
         console.log(`FAIL ${adcode} ${en} -> ${e.message}`)

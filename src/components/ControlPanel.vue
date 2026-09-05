@@ -181,8 +181,8 @@ onBeforeUnmount(() => window.clearTimeout(debounceTimer))
       </div>
       <p class="policy-note" :class="{ warn: store.currentPolicy === 'SUBWAY' }">
         {{ store.currentPolicy === 'SUBWAY'
-          ? '仅地铁模式的等时圈偏保守：只计步行+地铁，且地铁图数据可能不含部分郊区/城际线路，结果常明显偏小。建议使用「地铁+公交」获得更完整覆盖。'
-          : '地铁+公交 覆盖最广；仅公交 仅按公交线路计算。' }}
+          ? '仅地铁：按地铁网络遍历计算站至站可达时间（含换乘），覆盖各条线路（含城际），最长 180 分钟。'
+          : '地铁+公交 覆盖最广；仅公交 仅按公交线路计算（高德等时圈上限 60 分钟）。' }}
       </p>
     </section>
 
@@ -202,7 +202,7 @@ onBeforeUnmount(() => window.clearTimeout(debounceTimer))
       />
       <div class="slider-scale">
         <span>{{ TIME_MIN }} 分</span>
-        <span>60 分</span>
+        <span>{{ TIME_MAX }} 分</span>
       </div>
     </section>
 

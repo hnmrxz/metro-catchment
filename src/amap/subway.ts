@@ -1,15 +1,8 @@
 /**
- * 地铁站点数据：从同源静态数据文件获取（public/data/subway/stations-<adcode>.json）。
- * 数据由 scripts/generate-subway-data.mjs 预生成（源自高德地铁数据），避免依赖不稳定的
- * 地铁图 JS API（Beta 版，且不便于浏览器直接加载）。
+ * 地铁站点检索与类型。
+ * 站点/线路数据读取见 metroGraph.ts（fetchMetroData）。这里只保留检索与类型。
  */
 import type { PlaceCandidate } from '../types'
-
-export interface NormalizedLine {
-  name: string
-  color: string
-  stations: NormalizedStation[]
-}
 
 export interface NormalizedStation {
   id: string
@@ -19,24 +12,8 @@ export interface NormalizedStation {
   lineNames: string[]
   /** 所属城市名（跨城市检索时用于区分） */
   city?: string
-}
-
-/** 从静态数据文件加载某城市所有站点。 */
-export async function fetchCityStations(adcode: string, cityName?: string): Promise<NormalizedStation[]> {
-  const res = await fetch(`/data/subway/stations-${adcode}.json`)
-  if (!res.ok) throw new Error(`地铁数据加载失败 (${res.status})`)
-  const data = await res.json()
-  const raw = Array.isArray(data?.stations) ? data.stations : []
-  return raw
-    .map((s: any) => ({
-      id: String(s?.id ?? `${adcode}:${s?.name}`),
-      name: String(s?.name ?? ''),
-      lng: Number(s?.lng),
-      lat: Number(s?.lat),
-      lineNames: Array.isArray(s?.lineNames) ? (s.lineNames as string[]) : [],
-      city: cityName,
-    }))
-    .filter((s: any) => s.name && Number.isFinite(s.lng) && Number.isFinite(s.lat))
+  /** 所属城市 adcode（用于取线路图） */
+  cityAdcode?: string
 }
 
 /** 在站点列表中按关键词模糊检索（支持站名/拼音/线路）。 */
@@ -60,25 +37,4 @@ export function searchStations(
     address: [s.city, ...s.lineNames].filter(Boolean).join(' / ') || undefined,
     type: 'station' as const,
   }))
-}
-
-// ----- 兼容旧接口（生成数据后不再用于运行时，仅保留类型描述） -----
-export function flattenStations(lines: NormalizedLine[], cityName?: string): NormalizedStation[] {
-  const map = new Map<string, NormalizedStation>()
-  for (const line of lines) {
-    for (const st of line.stations) {
-      const key = `${st.name}|${st.lng}|${st.lat}`
-      const exist = map.get(key)
-      if (exist) {
-        if (!exist.lineNames.includes(line.name)) exist.lineNames.push(line.name)
-      } else {
-        map.set(key, {
-          ...st,
-          lineNames: [...new Set([...st.lineNames, line.name])],
-          city: cityName || st.city,
-        })
-      }
-    }
-  }
-  return Array.from(map.values())
 }

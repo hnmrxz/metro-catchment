@@ -9,9 +9,10 @@ import {
   type Policy,
 } from '@/config'
 import { hasKey } from '@/amap/loader'
-import { fetchCityStations, searchStations, type NormalizedStation } from '@/amap/subway'
+import { searchStations, type NormalizedStation } from '@/amap/subway'
+import { fetchMetroData, computeMetroCoverage, nearestStation, type MetroLine } from '@/amap/metroGraph'
 import { intersectRings } from '@/utils/isochroneGeometry'
-import type { ArrivalRangeResult, Point, PlaceCandidate } from '@/types'
+import type { ArrivalRangeResult, MetroCoverageResult, Point, PlaceCandidate } from '@/types'
 import type { MapMode } from '@/engine'
 
 let pointSeq = 0
@@ -43,6 +44,8 @@ export const useAppStore = defineStore('app', () => {
   const stationPoolLoading = ref(false)
   const stationPoolReady = ref(false)
   const poolLoadedCities = new Set<string>()
+  // 各城市地铁线路图（用于地铁网络时间覆盖计算）
+  const metroLinesCache = new Map<string, MetroLine[]>()
 
   const selectedPoint = computed(() =>
     points.value.find((p) => p.id === selectedPointId.value) || null,
@@ -65,6 +68,7 @@ export const useAppStore = defineStore('app', () => {
     stations.value = []
     stationPoolReady.value = false
     poolLoadedCities.clear()
+    metroLinesCache.clear()
     if (mode.value === 'real') {
       void loadStations()
     }
@@ -151,7 +155,12 @@ export const useAppStore = defineStore('app', () => {
       const prev = map.get(k)
       if (prev) {
         const lines = new Set([...prev.lineNames, ...s.lineNames])
-        map.set(k, { ...prev, lineNames: [...lines], city: prev.city || s.city })
+        map.set(k, {
+          ...prev,
+          lineNames: [...lines],
+          city: prev.city || s.city,
+          cityAdcode: prev.cityAdcode || s.cityAdcode,
+        })
       } else {
         map.set(k, s)
       }
@@ -162,8 +171,10 @@ export const useAppStore = defineStore('app', () => {
   async function loadCityStations(adcode: string, cityName: string): Promise<void> {
     if (poolLoadedCities.has(adcode)) return
     try {
-      const list = await fetchCityStations(adcode, cityName)
-      mergeStations(list)
+      const data = await fetchMetroData(adcode)
+      const tagged = data.stations.map((s) => ({ ...s, city: cityName, cityAdcode: adcode }))
+      mergeStations(tagged)
+      metroLinesCache.set(adcode, data.lines)
       poolLoadedCities.add(adcode)
     } catch {
       // 单城失败不阻塞其它城市；允许下次重试
@@ -176,9 +187,15 @@ export const useAppStore = defineStore('app', () => {
     stationsLoading.value = true
     setStatus('正在获取地铁站点数据…')
     try {
-      const list = await fetchCityStations(city.value.adcode, city.value.name)
-      stations.value = list
-      mergeStations(list)
+      const data = await fetchMetroData(city.value.adcode)
+      const tagged = data.stations.map((s) => ({
+        ...s,
+        city: city.value.name,
+        cityAdcode: city.value.adcode,
+      }))
+      stations.value = tagged
+      mergeStations(tagged)
+      metroLinesCache.set(city.value.adcode, data.lines)
       poolLoadedCities.add(city.value.adcode)
       void ensureStationPool()
       setStatus(`已获取 ${stations.value.length} 个地铁站点`, 2500)
@@ -188,6 +205,31 @@ export const useAppStore = defineStore('app', () => {
       stationsLoading.value = false
     }
     return stations.value
+  }
+
+  /** 计算从某点出发的地铁站至地铁站时间覆盖（就近站点为起点）。 */
+  function metroCoverageFor(
+    lnglat: [number, number],
+    time: number,
+  ): MetroCoverageResult | null {
+    const source = stationPool.value.length ? stationPool.value : stations.value
+    const nearest = nearestStation(source, lnglat[0], lnglat[1])
+    if (!nearest) return null
+    const adcode = nearest.cityAdcode || city.value.adcode
+    const lines = metroLinesCache.get(adcode)
+    if (!lines || !lines.length) return null
+    const cover = computeMetroCoverage(source, lines, lnglat, time)
+    if (!cover || !cover.startStation) return null
+    return {
+      startLnglat: [cover.startStation.lng, cover.startStation.lat],
+      startName: cover.startStation.name,
+      reachable: cover.reachableStations.map((r) => ({
+        name: r.station.name,
+        lnglat: [r.station.lng, r.station.lat],
+        minutes: r.minutes,
+      })),
+      edges: cover.edges.map((e) => ({ from: e.from, to: e.to })),
+    }
   }
 
   /** 确保跨城市检索池已加载（当前城市 + 各配置城市，逐个加载以避免 Subway 全局冲突）。 */
@@ -256,5 +298,6 @@ export const useAppStore = defineStore('app', () => {
     loadStations,
     ensureStationPool,
     searchStationsLocal,
+    metroCoverageFor,
   }
 })

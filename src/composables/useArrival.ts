@@ -26,12 +26,26 @@ export async function computeForPoint(
     status: 'pending',
   }
 
+  // 纯地铁：使用「地铁网络遍历」的站至站时间覆盖（更贴近地铁实际可达，
+  // 且不受高德 60 分钟限制，最长 180 分钟）。
+  if (policy === 'SUBWAY') {
+    const cover = store.metroCoverageFor(point.lnglat, time)
+    if (cover) {
+      base.metroCoverage = cover
+      base.status = cover.reachable.length ? 'complete' : 'empty'
+      if (!cover.reachable.length) base.message = '时间预算内无可达地铁站'
+    } else {
+      base.status = 'empty'
+      base.message = '该点附近暂无地铁数据'
+    }
+    return base
+  }
+
+  // 公交 / 地铁+公交：使用高德等时圈（上限 60 分钟）
+  const t = Math.min(time, 60)
   if (runtime.mode === 'real' && runtime.AMap) {
     try {
-      const res = await searchArrivalRange(runtime.AMap, point.lnglat, {
-        policy,
-        time,
-      })
+      const res = await searchArrivalRange(runtime.AMap, point.lnglat, { policy, time: t })
       base.bounds = res.bounds
       base.status = res.status
       base.message = res.message
@@ -41,8 +55,11 @@ export async function computeForPoint(
     }
   } else {
     // 演示模式
-    base.bounds = generateMockIsochrone(point.lnglat, time, policy)
+    base.bounds = generateMockIsochrone(point.lnglat, t, policy)
     base.status = 'complete'
+  }
+  if (time > 60) {
+    base.message = (base.message ? base.message + '；' : '') + '高德等时圈最多 60 分钟，已按 60 分钟计算'
   }
 
   return base

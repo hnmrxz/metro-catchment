@@ -37,6 +37,12 @@ onMounted(async () => {
   }
   if (!added) return
   if (params.get('intersect') === '1') store.toggleIntersection()
+  const pol = params.get('policy')
+  if (pol && (pol === 'SUBWAY' || pol === 'BUS' || pol === 'SUBWAY,BUS')) {
+    store.currentPolicy = pol
+  }
+  const t = Number(params.get('time'))
+  if (Number.isFinite(t) && t >= 1 && t <= 180) store.currentTime = t
   if (params.get('run') === '1') {
     // 真实模式需等待地图与插件就绪；演示模式无需等待
     if (store.mode === 'real') {

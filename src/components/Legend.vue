@@ -22,6 +22,9 @@ function truncate(s: string, n = 12): string {
     <span v-if="store.showIntersection" class="legend-item">
       <span class="chip chip-int"></span> 多起点交集
     </span>
+    <span v-if="store.currentPolicy === 'SUBWAY'" class="legend-item">
+      <span class="chip chip-metro"></span> 地铁网络覆盖（站至站可达，≤{{ store.currentTime }} 分钟）
+    </span>
     <span class="legend-meta">{{ store.currentTime }} 分钟 · {{ policyLabel() }}</span>
   </div>
 </template>
@@ -53,6 +56,9 @@ function truncate(s: string, n = 12): string {
 .chip-int {
   background: #facc15;
   border: 2px solid #eab308;
+}
+.chip-metro {
+  background: #22c55e;
 }
 .legend-meta {
   margin-left: auto;

@@ -24,8 +24,21 @@ export interface ArrivalRangeResult {
   status: 'pending' | 'complete' | 'empty' | 'error'
   /** 错误信息（status 为 error 时） */
   message?: string
+  /** 地铁网络覆盖（乘坐地铁可达的站点/区段，供“纯地铁”模式使用） */
+  metroCoverage?: MetroCoverageResult
   /** 覆盖物实例（真实地图时为 AMap.Polygon[]，演示模式为内部句柄），由渲染层维护 */
   overlays?: unknown[]
+}
+
+/** 地铁站至地铁站的时间覆盖（网络遍历结果） */
+export interface MetroCoverageResult {
+  /** 起点站 */
+  startLnglat: [number, number]
+  startName: string
+  /** 在时间预算内可达的站点（按时间升序） */
+  reachable: Array<{ name: string; lnglat: [number, number]; minutes: number }>
+  /** 可达的线路区段（用于渲染覆盖网络） */
+  edges: Array<{ from: [number, number]; to: [number, number] }>
 }
 
 /** 地图拾取或搜索到的候选结果 */

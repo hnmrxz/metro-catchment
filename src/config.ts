@@ -44,9 +44,9 @@ export const POLICY_OPTIONS: Array<{ value: Policy; label: string; desc: string 
   { value: 'SUBWAY,BUS', label: '地铁+公交', desc: '地铁与公交换乘（默认）' },
 ]
 
-/** 可达圈时间范围（分钟） */
+/** 可达圈时间范围（分钟）。纯地铁网络覆盖最长 180；高德等时圈上限 60。 */
 export const TIME_MIN = 1
-export const TIME_MAX = 60
+export const TIME_MAX = 180
 export const DEFAULT_TIME = 30
 
 /** 最大同时对比起点数 */
